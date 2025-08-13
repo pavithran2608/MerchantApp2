@@ -1,97 +1,193 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Merchant App - Student Payment Portal
 
-# Getting Started
+A React Native merchant application that allows merchants to scan student QR codes and process payments.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Features
 
-## Step 1: Start Metro
+- **Dashboard**: Main merchant interface with quick actions and statistics
+- **QR Code Scanner**: Real-time QR code scanning for student identification
+- **Payment Processing**: Student details display and payment processing
+- **Mock API**: Simulated backend for testing student data and payments
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Student Data
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+The app includes mock data for 5 test students:
 
-```sh
-# Using npm
-npm start
+- **STU001**: John Smith (Computer Science) - $1,250.00 balance
+- **STU002**: Sarah Johnson (Business Administration) - $850.50 balance
+- **STU003**: Michael Chen (Engineering) - $2,100.75 balance
+- **STU004**: Emily Davis (Arts & Humanities) - $675.25 balance
+- **STU005**: David Wilson (Medicine) - $3,200.00 balance
 
-# OR using Yarn
-yarn start
+## How to Test
+
+### 1. Generate Test QR Codes
+
+1. Go to any online QR code generator (e.g., qr-code-generator.com)
+2. Encode one of the student IDs: `STU001`, `STU002`, `STU003`, `STU004`, or `STU005`
+3. Generate the QR code image
+
+### 2. Test the App Flow
+
+1. **Start the app**: `npx react-native run-android`
+2. **Navigate to Scanner**: Tap "📱 Scan Student QR Code" on the dashboard
+3. **Scan QR Code**: Point camera at the generated QR code
+4. **View Student Details**: App will fetch and display student information
+5. **Process Payment**: Navigate to payment screen and process the transaction
+
+## App Flow
+
+```
+Dashboard → QR Scanner → Payment Screen → Success/Back to Dashboard
 ```
 
-## Step 2: Build and run your app
+### Dashboard
+- Overview of merchant activities
+- Quick access to QR scanner
+- Test QR codes information
+- Recent transaction history
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+### QR Scanner
+- Real-time camera scanning
+- Student ID extraction from QR codes
+- API call to fetch student details
+- Navigation to payment screen
 
-### Android
+### Payment Screen
+- Complete student information display
+- Current balance and payment amount
+- Payment processing with mock API
+- Success/failure handling
 
-```sh
-# Using npm
-npm run android
+## Technical Implementation
 
-# OR using Yarn
-yarn android
+### Libraries Used
+- `@react-navigation/native` & `@react-navigation/stack`: Navigation
+- `react-native-qrcode-scanner`: QR code scanning
+- `react-native-camera`: Camera functionality
+- `react-native-safe-area-context`: Safe area handling
+
+### Key Components
+- **Dashboard**: Main merchant interface
+- **QrScanner**: Camera-based QR code scanning
+- **PaymentScreen**: Payment processing interface
+- **Mock API**: Simulated backend services
+
+### Data Flow
+1. QR code contains student ID (e.g., "STU001")
+2. Scanner extracts ID and calls `fetchStudentDetails()`
+3. Mock API returns student data
+4. App navigates to PaymentScreen with student details
+5. Payment processing calls `processPayment()` API
+6. Success/failure feedback to user
+
+## Installation & Setup
+
+### Prerequisites
+- Node.js and npm
+- React Native CLI
+- Android Studio (for Android development)
+- Xcode (for iOS development)
+
+### Installation Steps
+
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Install navigation dependencies**:
+   ```bash
+   npm install @react-navigation/native @react-navigation/stack react-native-screens react-native-safe-area-context
+   ```
+
+3. **For iOS** (if developing on macOS):
+   ```bash
+   cd ios && pod install
+   ```
+
+4. **Start Metro bundler**:
+   ```bash
+   npx react-native start
+   ```
+
+5. **Run on Android**:
+   ```bash
+   npx react-native run-android
+   ```
+
+6. **Run on iOS** (macOS only):
+   ```bash
+   npx react-native run-ios
+   ```
+
+## Testing QR Codes
+
+### Method 1: Online QR Generator
+1. Visit qr-code-generator.com
+2. Enter student ID (e.g., "STU001")
+3. Generate QR code
+4. Scan with app
+
+### Method 2: Mobile QR Generator Apps
+- Use any QR code generator app
+- Encode student ID as text
+- Generate and scan
+
+### Method 3: Physical QR Codes
+- Print generated QR codes
+- Test with physical scanning
+
+## Mock API Details
+
+### Student Data Structure
+```typescript
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  department: string;
+  balance: number;
+  studentId: string;
+  semester: string;
+  year: string;
+}
 ```
 
-### iOS
+### API Endpoints (Mock)
+- `fetchStudentDetails(studentId)`: Returns student information
+- `processPayment(studentId, amount, method)`: Processes payment
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## Troubleshooting
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+### Common Issues
 
-```sh
-bundle install
+1. **Camera Permission**: Ensure camera permissions are granted
+2. **QR Code Not Detected**: Make sure QR code is clear and well-lit
+3. **Navigation Issues**: Check that all navigation dependencies are installed
+4. **Build Errors**: Clean and rebuild the project
+
+### Build Commands
+```bash
+# Clean build
+cd android && ./gradlew clean && cd ..
+npx react-native run-android
+
+# Reset cache
+npx react-native start --reset-cache
 ```
 
-Then, and every time you update your native dependencies, run:
+## Future Enhancements
 
-```sh
-bundle exec pod install
-```
+- Real backend API integration
+- Payment gateway integration
+- Transaction history
+- Receipt generation
+- Offline mode support
+- Push notifications
+- Analytics dashboard
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+## License
 
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+This project is for educational and testing purposes.
