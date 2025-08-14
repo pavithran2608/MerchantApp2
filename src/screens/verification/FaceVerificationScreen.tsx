@@ -15,7 +15,8 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
-import { api, Student, CartItem, FaceVerificationRequest } from '../../services/api';
+import { api, Student, CartItem, FaceVerificationResponse, FindStudentResponse } from '../../services/api';
+import { embeddingService } from '../../services/embeddingService';
 
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -51,6 +52,8 @@ const FaceVerificationScreen: React.FC = () => {
   const [student, setStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(false);
+  // Remove verificationMode state - no longer needed
 
   // Camera setup
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -84,6 +87,27 @@ const FaceVerificationScreen: React.FC = () => {
       requestPermission();
     }
   }, [hasPermission, requestPermission]);
+
+  // Initialize embedding service when component mounts
+  useEffect(() => {
+    const initializeService = async () => {
+      try {
+        setIsModelLoading(true);
+        await embeddingService.initialize();
+        console.log('Embedding service initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize embedding service:', error);
+        Alert.alert(
+          'Service Error',
+          'Failed to initialize face recognition service. Please restart the app.'
+        );
+      } finally {
+        setIsModelLoading(false);
+      }
+    };
+
+    initializeService();
+  }, []);
 
   const handleFindStudent = async () => {
     // Check if at least one field is filled
@@ -135,56 +159,70 @@ const FaceVerificationScreen: React.FC = () => {
   };
 
   const handleCaptureAndProcess = async () => {
-    if (!camera.current || !student) return;
+    if (!camera.current || !student) {
+      console.log('Camera or student not available');
+      return;
+    }
+
+    if (!embeddingService.isReady()) {
+      Alert.alert(
+        'Service Not Ready',
+        'Face recognition service is still initializing. Please wait a moment and try again.'
+      );
+      return;
+    }
 
     setIsCapturing(true);
     try {
+      console.log('Taking photo for face verification...');
+      
       // Take photo
       const photo = await camera.current.takePhoto({
         qualityPrioritization: 'quality',
         flash: 'off',
         enableShutterSound: false,
       });
+      
+      console.log('Photo taken, path:', photo.path);
+      
+      // Create proper URI for Android compatibility
+      const imagePath = Platform.OS === 'android' 
+        ? `file://${photo.path}` 
+        : photo.path;
+      
+      console.log('Image path for embedding generation:', imagePath);
 
-      // Convert photo to base64 (in production, you'd handle the file properly)
-      // For demo purposes, we'll simulate the image data
-      const imageData = `data:image/jpeg;base64,${photo.path}`;
+      // Generate embedding and verify with backend
+      const result = await api.verifyFaceWithEmbedding(imagePath, student.studentId);
 
-      // Prepare verification request
-      const verificationData: FaceVerificationRequest = {
-        studentId: student.studentId,
-        imageData,
-        cartItems: cartData,
-        totalAmount,
-      };
-
-      // Call face verification API
-      const verificationResponse = await api.verifyFace(verificationData);
-
-      if (verificationResponse.success) {
-        // Navigate to transaction confirmation
+      if (result.success) {
+        console.log('Face verification successful!');
+        
+        // Success - navigate to transaction confirmation
         navigation.replace('TransactionConfirmation', {
-          transactionId: verificationResponse.transactionId || 'TXN_DEMO',
+          transactionId: result.transactionId || `TXN_${Date.now()}`,
           student,
           cartItems: cartData,
           totalAmount,
         });
       } else {
-        // Navigate to TransactionFailure screen
-        navigation.replace('TransactionFailure', {
-          errorMessage: verificationResponse.message,
-        });
+        console.log('Face verification failed:', result.message);
+        Alert.alert(
+          'Verification Failed', 
+          result.message || 'Face verification failed. Please try again.'
+        );
       }
+
     } catch (error) {
+      console.error('Error during face capture and verification:', error);
       const errorMessage = error instanceof Error ? error.message : 'Face verification failed';
-      // Navigate to TransactionFailure screen
-      navigation.replace('TransactionFailure', {
-        errorMessage,
-      });
+      Alert.alert('Error', `Face verification failed: ${errorMessage}`);
     } finally {
       setIsCapturing(false);
     }
   };
+
+  // Remove handleFaceRegistration and handleFaceVerification methods - no longer needed
 
   const handleCancel = () => {
     Alert.alert(
@@ -305,6 +343,24 @@ const FaceVerificationScreen: React.FC = () => {
       );
     }
 
+    if (isModelLoading) {
+      return (
+        <View style={styles.stepContainer}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Initializing Face Recognition</Text>
+            <Text style={styles.subtitle}>
+              Please wait while we load the AI model...
+            </Text>
+          </View>
+          
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading MobileNet model...</Text>
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.stepContainer}>
         {/* Header Section */}
@@ -316,8 +372,10 @@ const FaceVerificationScreen: React.FC = () => {
             </Text>
           )}
           <Text style={styles.instruction}>
-            Position the student's face inside the oval
+            Position the student's face inside the oval to verify
           </Text>
+          
+          {/* Remove Mode Toggle - no longer needed */}
         </View>
 
         {/* Camera Container */}
@@ -554,6 +612,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  loadingText: {
+    color: '#8E8E93',
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: 'center',
   },
   cameraContainer: {
     flex: 1,

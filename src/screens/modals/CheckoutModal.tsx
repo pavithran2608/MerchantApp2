@@ -8,9 +8,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 // Navigation types
 type RootStackParamList = {
   CheckoutModal: { cartItems: CartItem[]; totalAmount: number };
-  NfcVerification: { cartData: CartItem[]; totalAmount: number };
   FaceVerification: { cartData: CartItem[]; totalAmount: number };
   QrVerification: { cartData: CartItem[]; totalAmount: number };
+  NfcVerification: { cartData: CartItem[]; totalAmount: number };
 };
 
 type CheckoutModalNavigationProp = StackNavigationProp<RootStackParamList, 'CheckoutModal'>;
@@ -22,12 +22,7 @@ const CheckoutModal: React.FC = () => {
   const { cartItems, totalAmount } = route.params;
   const { colors } = useTheme();
 
-  const handleNfcScan = () => {
-    navigation.navigate('NfcVerification', {
-      cartData: cartItems,
-      totalAmount,
-    });
-  };
+
 
   const handleFaceScan = () => {
     navigation.navigate('FaceVerification', {
@@ -38,6 +33,13 @@ const CheckoutModal: React.FC = () => {
 
   const handleQrScan = () => {
     navigation.navigate('QrVerification', {
+      cartData: cartItems,
+      totalAmount,
+    });
+  };
+
+  const handleNfcScan = () => {
+    navigation.navigate('NfcVerification', {
       cartData: cartItems,
       totalAmount,
     });
@@ -99,10 +101,12 @@ const CheckoutModal: React.FC = () => {
 
           <TouchableOpacity style={[styles.verificationButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={handleNfcScan}>
             <View style={styles.buttonContent}>
-              <Text style={styles.buttonIcon}>💳</Text>
+              <Text style={styles.buttonIcon}>📶</Text>
               <Text style={[styles.buttonText, { color: '#ffffff' }]}>Scan Student NFC Card</Text>
             </View>
           </TouchableOpacity>
+
+
         </View>
 
         {/* Cancel Button */}

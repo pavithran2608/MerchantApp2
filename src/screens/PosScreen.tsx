@@ -24,7 +24,7 @@ type RootStackParamList = {
   FaceVerification: { cartData: CartItem[]; totalAmount: number };
   QrVerification: { cartData: CartItem[]; totalAmount: number };
   Passcode: { cartData: CartItem[]; totalAmount: number };
-  NfcVerification: { cartData: CartItem[]; totalAmount: number };
+
 };
 
 type PosScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PosScreen'>;

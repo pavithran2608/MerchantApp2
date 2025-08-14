@@ -64,11 +64,6 @@ const ChangePasswordScreen: React.FC = () => {
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Change Password</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Update your account password</Text>
-      </View>
-
       <View style={[styles.form, { backgroundColor: colors.surface, shadowColor: colors.text }]}>
         <View style={styles.field}> 
           <Text style={[styles.label, { color: colors.text }]}>Current Password</Text>
@@ -138,14 +133,6 @@ async function apiChangePassword({ token, currentPassword, newPassword }: { toke
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  title: { fontSize: 24, fontWeight: '800', marginBottom: 4 },
-  subtitle: { fontSize: 14, fontWeight: '500' },
   form: {
     marginTop: 12,
     marginHorizontal: 16,

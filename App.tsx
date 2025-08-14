@@ -18,12 +18,14 @@ import Settings from './src/screens/SettingsScreen';
 import FaceVerification from './src/screens/FaceVerification';
 import QrVerification from './src/screens/QrVerification';
 import Passcode from './src/screens/Passcode';
-import NfcVerification from './src/screens/NfcVerification';
+
 import TransactionConfirmation from './src/screens/TransactionConfirmation';
 import TransactionSuccess from './src/screens/confirmation/TransactionSuccessScreen';
 import TransactionFailure from './src/screens/confirmation/TransactionFailureScreen';
 import CheckoutModal from './src/screens/modals/CheckoutModal';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
+import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
+import NfcVerificationScreen from './src/screens/verification/NfcVerificationScreen';
 
 // Import existing components
 import QrScanner from './src/QrScanner';
@@ -38,6 +40,7 @@ type RootStackParamList = {
   QrVerification: { cartData?: any[]; totalAmount?: number };
   Passcode: { cartData?: any[]; totalAmount?: number };
   NfcVerification: { cartData?: any[]; totalAmount?: number };
+
   TransactionConfirmation: {
     transactionId: string;
     student: any;
@@ -50,6 +53,7 @@ type RootStackParamList = {
   FaceScanner: undefined;
   PaymentScreen: undefined;
   ChangePassword: undefined;
+  TransactionHistory: undefined;
 };
 
 type TabsParamList = {
@@ -149,14 +153,30 @@ const modalOptions: StackNavigationOptions = {
   headerShown: false,
 };
 
-export default function App(): React.JSX.Element {
+// Theme-aware root navigator component
+function RootNavigator() {
+  const { colors } = useTheme();
+
   return (
-    <ThemeProvider>
-      <NavigationContainer>
-        <Stack.Navigator
-          initialRouteName="Auth"
-          screenOptions={{ headerShown: false }}
-        >
+    <Stack.Navigator
+      initialRouteName="Auth"
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        // Custom header styling for screens that show headers
+        ...(route.name === 'TransactionHistory' || route.name === 'ChangePassword' ? {
+          headerShown: true,
+          headerStyle: { 
+            backgroundColor: colors.surface, // Dynamic background color
+            shadowColor: 'transparent', // Remove shadow
+          },
+          headerTintColor: colors.text, // Dynamic color for title and back arrow
+          headerTitleStyle: { 
+            fontWeight: 'bold',
+            color: colors.text, // Dynamic title color
+          },
+        } : {})
+      })}
+    >
           {/* Initial auth flow */}
           <Stack.Screen name="Auth" component={AuthScreen} />
 
@@ -177,7 +197,8 @@ export default function App(): React.JSX.Element {
           <Stack.Screen name="FaceVerification" component={FaceVerification} options={modalOptions} />
           <Stack.Screen name="QrVerification" component={QrVerification} options={modalOptions} />
           <Stack.Screen name="Passcode" component={Passcode} options={modalOptions} />
-          <Stack.Screen name="NfcVerification" component={NfcVerification} options={modalOptions} />
+          <Stack.Screen name="NfcVerification" component={NfcVerificationScreen} options={modalOptions} />
+
 
           {/* Transaction screens */}
           <Stack.Screen name="TransactionConfirmation" component={TransactionConfirmation} />
@@ -188,8 +209,25 @@ export default function App(): React.JSX.Element {
           <Stack.Screen name="QrScanner" component={QrScanner} />
           <Stack.Screen name="FaceScanner" component={FaceScanner} />
           <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+          <Stack.Screen 
+            name="ChangePassword" 
+            component={ChangePasswordScreen} 
+            options={{ title: 'Change Password' }} 
+          />
+          <Stack.Screen 
+            name="TransactionHistory" 
+            component={TransactionHistoryScreen} 
+            options={{ title: 'All Transactions' }} 
+          />
         </Stack.Navigator>
+  );
+}
+
+export default function App(): React.JSX.Element {
+  return (
+    <ThemeProvider>
+      <NavigationContainer>
+        <RootNavigator />
       </NavigationContainer>
     </ThemeProvider>
   );

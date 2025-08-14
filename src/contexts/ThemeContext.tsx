@@ -26,6 +26,7 @@ interface ThemeColors {
   warning: string;
   overlay: string;
   card: string;
+  shadow: string;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);

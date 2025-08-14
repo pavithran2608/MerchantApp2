@@ -1,3 +1,5 @@
+import { embeddingService, EmbeddingResult } from './embeddingService';
+
 export interface LoginResponse {
   token: string;
   user: {
@@ -106,6 +108,7 @@ export interface FindStudentResponse {
 export interface FaceVerificationRequest {
   studentId: string;
   imageData: string; // Base64 encoded image
+  embedding?: number[]; // Optional FaceNet embedding
   cartItems: CartItem[];
   totalAmount: number;
 }
@@ -134,6 +137,16 @@ export interface VerifyPasscodeResponse {
 
 class ApiService {
   private baseUrl = 'https://api.merchantapp.com'; // Replace with your actual API URL
+  private authToken: string | null = null;
+
+  // Mock authentication token getter
+  private async getAuthToken(): Promise<string> {
+    if (this.authToken) {
+      return this.authToken;
+    }
+    // For demo purposes, return a mock token
+    return 'mock-jwt-token-12345';
+  }
 
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
@@ -319,6 +332,18 @@ class ApiService {
   async verifyFace(verificationData: FaceVerificationRequest) {
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Log embedding if provided
+      if (verificationData.embedding) {
+        console.log('FaceNet embedding received:', {
+          length: verificationData.embedding.length,
+          first8Values: verificationData.embedding.slice(0, 8),
+          last8Values: verificationData.embedding.slice(-8)
+        });
+      } else {
+        console.log('No FaceNet embedding provided - using basic face detection only');
+      }
+      
       const randomSuccess = Math.random() > 0.3;
       if (randomSuccess) {
         return { success: true, message: 'Face verification successful! Identity confirmed.', transactionId: `TXN_${Date.now()}`, verificationScore: 0.94 };
@@ -362,13 +387,11 @@ class ApiService {
             amount: request.totalAmount,
             studentName: student.name,
             studentId: student.studentId,
-            productName: request.cartItems.map(item => item.name).join(', '),
+            productName: request.cartItems.map(item => item.product.name).join(', '),
             timestamp: new Date().toISOString(),
             status: 'completed',
             transactionType: 'credit',
             reference: `REF_${Date.now()}`,
-            cartItems: request.cartItems,
-            newBalance: student.balance - request.totalAmount,
           },
         };
       }
@@ -409,18 +432,67 @@ class ApiService {
           amount: request.totalAmount,
           studentName: student.name,
           studentId: student.studentId,
-          productName: request.cartItems.map(item => item.name).join(', '),
+          productName: request.cartItems.map(item => item.product.name).join(', '),
           timestamp: new Date().toISOString(),
           status: 'completed',
           transactionType: 'credit',
           reference: `REF_${Date.now()}`,
-          cartItems: request.cartItems,
-          newBalance: student.balance - request.totalAmount,
         },
       };
     } catch (error) {
       if (error instanceof Error) { throw error; }
       throw new Error('NFC verification failed. Please try again.');
+    }
+  }
+
+  /**
+   * Verify face using MobileNet embeddings
+   * Sends the generated embedding vector to the backend for comparison
+   */
+  async verifyFaceWithEmbedding(
+    imageUri: string, 
+    studentId: string
+  ): Promise<FaceVerificationResponse> {
+    try {
+      console.log('Starting face verification with embedding...');
+      
+      // Ensure embedding service is initialized
+      if (!embeddingService.isReady()) {
+        console.log('Initializing embedding service...');
+        await embeddingService.initialize();
+      }
+      
+      // Generate embedding on frontend
+      console.log('Generating face embedding...');
+      const embeddingResult: EmbeddingResult = await embeddingService.generateFaceEmbedding(imageUri);
+      
+      console.log(`Embedding generated: ${embeddingResult.embedding.length} dimensions, confidence: ${embeddingResult.confidence.toFixed(3)}`);
+      
+      // For demo purposes, simulate backend verification
+      // In production, you would send the embedding to your backend
+      console.log('Simulating backend verification...');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+      
+      // Mock verification result (90% success rate for demo)
+      const isSuccess = Math.random() > 0.1;
+      
+      if (isSuccess) {
+        const transactionId = `TXN_${Date.now()}`;
+        console.log('Face verification successful!');
+        
+        return {
+          success: true,
+          message: 'Face verification successful! Identity confirmed.',
+          transactionId,
+          verificationScore: 0.94
+        };
+      } else {
+        throw new Error('Face verification failed. The captured image does not match the student\'s registered photo. Please try again.');
+      }
+      
+    } catch (error) {
+      console.error('Face verification error:', error);
+      throw new Error(`Face verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

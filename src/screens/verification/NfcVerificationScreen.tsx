@@ -1,266 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import NfcManager, { Ndef, NfcTech } from 'react-native-nfc-manager';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { CartItem } from '../../services/api';
-import api from '../../services/api';
+import { api, CartItem } from '../../services/api';
 
-type NfcVerificationNavigationProp = StackNavigationProp<RootStackParamList, 'NfcVerification'>;
-type NfcVerificationRouteProp = RouteProp<RootStackParamList, 'NfcVerification'>;
+type RouteParams = {
+  cartData?: CartItem[];
+  totalAmount?: number;
+};
 
-interface Props {
-  navigation: NfcVerificationNavigationProp;
-  route: NfcVerificationRouteProp;
-}
+type ScanStatus = 'waiting' | 'scanning' | 'processing' | 'success' | 'error' | 'unsupported';
 
-const NfcVerificationScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { cartItems, totalAmount } = route.params;
+const NfcVerificationScreen: React.FC = () => {
   const { colors } = useTheme();
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationStep, setVerificationStep] = useState<'waiting' | 'scanning' | 'processing'>('waiting');
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { cartData = [], totalAmount = 0 } = (route.params || {}) as RouteParams;
+
+  const [status, setStatus] = useState<ScanStatus>('waiting');
+  const [message, setMessage] = useState<string>('Preparing NFC scanner...');
+  const startedRef = useRef(false);
 
   useEffect(() => {
-    // Start NFC verification process after a short delay
-    const timer = setTimeout(() => {
-      startNfcVerification();
-    }, 1000);
+    let canceled = false;
+    const init = async () => {
+      try {
+        const isSupported = await NfcManager.isSupported();
+        if (!isSupported) {
+          setStatus('unsupported');
+          setMessage('This device does not have an NFC reader. Please use a different verification method.');
+          return;
+        }
 
-    return () => clearTimeout(timer);
+        await NfcManager.start();
+        if (!canceled) startNfcScan();
+      } catch (e) {
+        setStatus('error');
+        setMessage('Failed to initialize NFC');
+      }
+    };
+    init();
+    return () => {
+      canceled = true;
+      NfcManager.cancelTechnologyRequest().catch(() => {});
+    };
   }, []);
 
-  const startNfcVerification = async () => {
-    setIsVerifying(true);
-    setVerificationStep('scanning');
+  const parseStudentIdFromTag = (tag: any): string | null => {
+    try {
+      if (tag?.ndefMessage?.length) {
+        for (const record of tag.ndefMessage) {
+          // Text record
+          if (record.tnf === Ndef.TNF_WELL_KNOWN && Ndef.util.bytesToString(record.type) === 'T') {
+            const text = Ndef.text.decodePayload(record.payload);
+            return text?.trim() || null;
+          }
+          // MIME payload fallback
+          if (record.tnf === Ndef.TNF_MIME_MEDIA) {
+            const payload = record.payload ? Ndef.util.bytesToString(record.payload) : '';
+            if (payload) return payload.trim();
+          }
+        }
+      }
+      if (tag?.id) return tag.id;
+    } catch {}
+    return null;
+  };
+
+  const startNfcScan = async () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    setStatus('scanning');
+    setMessage("Please tap the student's NFC card against the back of the phone.");
 
     try {
-      // Simulate NFC scanning delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setVerificationStep('processing');
+      await NfcManager.requestTechnology(NfcTech.Ndef, { alertMessage: 'Hold near the card...' });
+      const tag = await NfcManager.getTag();
+      await NfcManager.cancelTechnologyRequest().catch(() => {});
 
-      // Call NFC verification API
-      const result = await api.verifyNfc({ cartItems, totalAmount });
-
-      if (result.success && result.transaction) {
-        // Pass detailed transaction data to TransactionSuccess screen
-        navigation.replace('TransactionSuccess', {
-          transaction: result.transaction,
-          student: result.student,
-          cartItems,
-          totalAmount,
-          newBalance: result.transaction.newBalance,
-        });
-      } else {
-        throw new Error('NFC verification failed');
+      const studentId = parseStudentIdFromTag(tag);
+      if (!studentId) {
+        setStatus('error');
+        setMessage('Could not read student ID from card');
+        return;
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'NFC verification failed. Please try again.';
-      
-      // Navigate to TransactionFailure screen
-      navigation.replace('TransactionFailure', {
-        errorMessage: message,
-      });
-    } finally {
-      setIsVerifying(false);
+
+      setStatus('processing');
+      setMessage('Verifying card and processing payment...');
+
+      // Adjusted to match ApiService signature
+      const response = await api.verifyNfc({ cartItems: cartData, totalAmount });
+      if (response?.success && response?.transaction) {
+        setStatus('success');
+        setMessage('Payment approved');
+        // @ts-expect-error: navigation param typing handled in root navigator
+        navigation.navigate('TransactionSuccess', { transaction: response.transaction });
+      } else {
+        const errMsg = response?.message || 'Verification failed';
+        setStatus('error');
+        setMessage(errMsg);
+        // @ts-expect-error: navigation param typing handled in root navigator
+        navigation.navigate('TransactionFailure', { errorMessage: errMsg });
+      }
+    } catch (err: any) {
+      const canceled = typeof err?.toString === 'function' && `${err}`.toLowerCase().includes('cancel');
+      if (!canceled) {
+        setStatus('error');
+        setMessage('NFC scan failed');
+        Alert.alert('NFC Error', 'Failed to read NFC card. Please try again.');
+      }
     }
   };
 
-  const handleCancel = () => {
-    navigation.goBack();
-  };
-
-  const getStepText = () => {
-    switch (verificationStep) {
-      case 'waiting':
-        return 'Preparing NFC scanner...';
-      case 'scanning':
-        return 'Please tap the student\'s NFC card';
-      case 'processing':
-        return 'Processing payment...';
-      default:
-        return 'Verifying...';
-    }
-  };
-
-  const getStepIcon = () => {
-    switch (verificationStep) {
-      case 'waiting':
-        return '⏳';
-      case 'scanning':
-        return '📱';
-      case 'processing':
-        return '⚡';
-      default:
-        return '📱';
-    }
-  };
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleCancel} style={[styles.headerButton, { backgroundColor: colors.overlay }]}>
-          <Text style={[styles.headerButtonText, { color: colors.text }]}>✕ Cancel</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Content */}
-      <View style={styles.content}>
-        {/* NFC Icon */}
-        <View style={[styles.nfcIconContainer, { backgroundColor: colors.surface }]}>
-          <Text style={styles.nfcIcon}>💳</Text>
-        </View>
-
-        {/* Title */}
-        <Text style={[styles.title, { color: colors.text }]}>NFC Payment</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Tap the student's NFC card to complete payment
-        </Text>
-
-        {/* Verification Status */}
-        <View style={[styles.statusContainer, { backgroundColor: colors.surface }]}>
-          <Text style={styles.stepIcon}>{getStepIcon()}</Text>
-          <Text style={[styles.stepText, { color: colors.text }]}>{getStepText()}</Text>
-          
-          {isVerifying && (
-            <ActivityIndicator 
-              size="small" 
-              color={colors.primary} 
-              style={styles.spinner}
-            />
-          )}
-        </View>
-
-        {/* Payment Summary */}
-        <View style={[styles.summaryContainer, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.summaryTitle, { color: colors.text }]}>Payment Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Total Amount:</Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>
-              ${totalAmount.toFixed(2)}
+  const renderContent = () => {
+    switch (status) {
+      case 'unsupported':
+        return (
+          <View style={styles.center}>
+            <Text style={[styles.emoji, { color: colors.error || '#ef4444' }]}>🚫</Text>
+            <Text style={[styles.title, { color: colors.text }]}>NFC Not Supported</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              {message}
             </Text>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={[styles.button, { backgroundColor: colors.primary }]}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.buttonText}>Go Back</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Items:</Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>
-              {cartItems.length} item{cartItems.length !== 1 ? 's' : ''}
-            </Text>
+        );
+      case 'waiting':
+      case 'scanning':
+        return (
+          <View style={styles.center}>
+            <Text style={[styles.emoji, { color: colors.primary }]}>📶</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Tap Card to Scan</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{message}</Text>
+            <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
           </View>
-        </View>
-      </View>
-    </View>
-  );
+        );
+      case 'processing':
+        return (
+          <View style={styles.center}>
+            <Text style={[styles.emoji, { color: colors.primary }]}>🔄</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Processing</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{message}</Text>
+            <ActivityIndicator style={{ marginTop: 16 }} color={colors.primary} />
+          </View>
+        );
+      case 'success':
+        return (
+          <View style={styles.center}>
+            <Text style={[styles.emoji, { color: colors.success }]}>✅</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Payment Approved</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Redirecting...</Text>
+          </View>
+        );
+      case 'error':
+      default:
+        return (
+          <View style={styles.center}>
+            <Text style={[styles.emoji, { color: colors.error || '#ef4444' }]}>⚠️</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Scan Failed</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{message}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                startedRef.current = false;
+                startNfcScan();
+              }}
+              style={[styles.button, { backgroundColor: colors.primary }]}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.buttonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        );
+    }
+  };
+
+  return <View style={[styles.container, { backgroundColor: colors.background }]}>{renderContent()}</View>;
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    left: 20,
-    right: 20,
-    zIndex: 10,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  headerButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  headerButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  nfcIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  nfcIcon: {
-    fontSize: 60,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 40,
-    paddingHorizontal: 20,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 32,
-    minWidth: 280,
-  },
-  stepIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  stepText: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
-  spinner: {
-    marginLeft: 8,
-  },
-  summaryContainer: {
-    padding: 20,
-    borderRadius: 12,
-    width: '100%',
-    maxWidth: 320,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  summaryLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  container: { flex: 1, padding: 24, justifyContent: 'center' },
+  center: { alignItems: 'center' },
+  emoji: { fontSize: 56, marginBottom: 12 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 6 },
+  subtitle: { fontSize: 14, textAlign: 'center' },
+  button: { marginTop: 20, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
+  buttonText: { color: '#fff', fontWeight: '700' },
 });
 
 export default NfcVerificationScreen;
+

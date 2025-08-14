@@ -39,16 +39,16 @@ const WalletScreen: React.FC = () => {
 
   // Fetch wallet data on component mount and when focused
   useEffect(() => {
-    if (isFocused) {
+    if (isFocused && userData?.id) {
       fetchWalletData();
     }
-  }, [isFocused]);
+  }, [isFocused, userData]);
 
   // Get user data from AsyncStorage
   useEffect(() => {
     const getUserData = async () => {
       try {
-        const userDataString = await AsyncStorage.getItem('userData');
+        const userDataString = await AsyncStorage.getItem('@merchant_app_user_data');
         if (userDataString) {
           const user = JSON.parse(userDataString);
           setUserData(user);

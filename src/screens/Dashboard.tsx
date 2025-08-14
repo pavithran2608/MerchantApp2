@@ -11,7 +11,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, DashboardStats } from '../services/api';
 import { formatRelativeTime, formatCurrency } from '../utils/dateUtils';
@@ -29,6 +29,7 @@ interface UserData {
 const Dashboard: React.FC = () => {
   const isFocused = useIsFocused();
   const { colors, isDark } = useTheme();
+  const navigation = useNavigation<any>();
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +173,7 @@ const Dashboard: React.FC = () => {
             <View style={[styles.transactionsCard, { backgroundColor: colors.card, shadowColor: colors.shadow }]}>
               <View style={styles.transactionsHeader}>
                 <Text style={[styles.transactionsTitle, { color: colors.text }]}>Recent Transactions</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate('TransactionHistory')}>
                   <Text style={[styles.viewAllText, { color: colors.primary }]}>View All</Text>
                 </TouchableOpacity>
               </View>
